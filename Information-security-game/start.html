@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>資訊安全遊戲</title>
+  <link rel="icon" type="picture/x-icon" href="picture/流星.png" />
+  <style>
+
+    .decorative-images {
+    position: absolute;
+    top: 60%; /* 圖片放置在頁面中央 */
+    left: 80%;
+    transform: translate(-50%, -50%); /* 使圖片完全居中 */
+    }
+
+    .stars-decorative-images {
+    position: absolute;
+    top: 60%; /* 圖片放置在頁面中央 */
+    left: 20%;
+    transform: translate(-50%, -50%); /* 使圖片完全居中 */
+    }
+
+    body {
+      background-color: #002a64;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 500%;
+      text-align: center;
+      color: #bcbcbc;
+    }
+
+    canvas {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+      background-color: rgb(55, 7, 90);
+    }
+
+    .start-btn-container {
+      text-align: center;
+    }
+
+    .start-btn {
+      background-color: rgb(73, 178, 84);
+      color: white;
+      padding: 10px 30px;
+      font-size: 1.5vw;
+      border-radius: 30px;
+      cursor: pointer;
+    }
+
+    .start-btn:hover {
+      background-color: rgba(15, 96, 47, 0.753);
+    }
+
+    #imageStatus {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 8px;
+      z-index: 20;
+    }
+
+    #statusList div {
+      margin-top: 4px;
+    }
+  </style>
+</head>
+
+<body>
+    <h1 id="title">資訊安全遊戲</h1>
+
+    <!-- 主頁圖片 -->
+    <div class="main-image-container">
+        <img src="picture/small ufo.png" alt="遊戲介紹圖片" id="mainImage" style="width: 100%; max-width: 300px; margin: 0 auto; display: block;">
+    </div>
+
+    <div class="decorative-images">
+        <img src="picture/star.png" alt="星星" class="star-image">
+      </div>
+
+      <div class="stars-decorative-images">
+        <img src="picture/stars.png" alt="多星星" class="stars-image">
+      </div>
+
+    <div class="start-btn-container">
+      <button id="startBtn" class="start-btn">開始</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 左上角圖片載入狀態顯示 -->
+    <div id="imageStatus">
+      <strong>圖片載入狀態：</strong>
+      <div id="statusList">載入中...</div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const startBtn = document.getElementById("startBtn");
+      const title = document.getElementById("title");
+      const imageStatusList = document.getElementById("statusList");
+
+      let ufoSize, cannonSize, laserSize, spaceshipSize;
+      let cannonX, cannonY;
+      const borderThickness = 80;
+
+      let lasers = [];
+      let ufos = [];
+      const laserSpeed = 15;
+      const ufoSpeed = 2;
+
+      let ufoGenerationStopped = false;
+      let ufoIntervalId;
+      let hitsInCurrentLevel = 0;
+      let currentLevel = 0;
+
+      const imageMap = {
+        "泡.PNG": new Image(),
+        "雷射.png": new Image(),
+        "爆炸.png": new Image(),
+        "飛船.png": new Image(),
+        "ufo black.png": new Image(),
+        "ufo green.png": new Image(),
+        "勒索.png": new Image(),
+        "過關.png": new Image(),
+        "惡意.png": new Image(),
+        "勒索病毒.png": new Image(),
+        "釣魚.png": new Image()
+      };
+
+      const levels = [
+        {
+          name: "關卡一：惡意軟體",
+          targetHits: 3,
+          ufoImage: null,
+          description: "擊落棕色 UFO（代表惡意軟體），了解病毒與木馬的危害。",
+          onComplete: () => {
+            ufoGenerationStopped = true;
+            clearInterval(ufoIntervalId);
+            levelBannerImage.show(imageMap["惡意.png"]);
+            setTimeout(() => {
+              currentLevel++;
+              startLevel(currentLevel);
+            }, 4000);
+          }
+        },
+        {
+          name: "關卡二：釣魚網站",
+          targetHits: 5,
+          ufoImage: null,
+          description: "擊落綠色 UFO（代表網路釣魚網站），學會辨識假冒網站。",
+          onComplete: () => {
+            ufoGenerationStopped = true;
+            clearInterval(ufoIntervalId);
+            levelBannerImage.show(imageMap["釣魚.png"]);
+            setTimeout(() => {
+              currentLevel++;
+              startLevel(currentLevel);
+            }, 4000);
+          }
+        },
+        {
+          name: "關卡三：勒索病毒",
+          targetHits: 4,
+          ufoImage: null,
+          description: "擊落勒索病毒！這些攻擊會加密你的檔案並勒索贖金！",
+          onComplete: () => {
+            ufoGenerationStopped = true;
+            clearInterval(ufoIntervalId);
+            levelBannerImage.show(imageMap["勒索病毒.png"]);
+            // 等待4秒後顯示過關圖片
+            setTimeout(() => {
+              alert("✅ 成功阻止勒索病毒！");
+              secretImageObj.isVisible = true;
+            }, 4000);
+          }
+        }
+      ];
+
+      let imagesLoaded = 0;
+      const imagesToLoad = Object.keys(imageMap).length;
+
+      for (const [fileName, img] of Object.entries(imageMap)) {
+        img.onload = () => {
+          imagesLoaded++;
+          logImageStatus(fileName, true);
+          checkIfAllImagesLoaded();
+        };
+        img.onerror = () => {
+          logImageStatus(fileName, false);
+          checkIfAllImagesLoaded();
+        };
+        img.src = `picture/${fileName}`;
+      }
+
+      function logImageStatus(name, success) {
+        if (imagesLoaded === 1) imageStatusList.innerHTML = "";
+        const item = document.createElement("div");
+        item.textContent = `${success ? "✔" : "❌"} ${name}`;
+        item.style.color = success ? "green" : "red";
+        imageStatusList.appendChild(item);
+      }
+
+      const cannonImg = imageMap["泡.PNG"];
+      const laserImg = imageMap["雷射.png"];
+      const explosionImg = imageMap["爆炸.png"];
+      const spaceshipImg = imageMap["飛船.png"];
+
+      const secretImageObj = {
+        img: null,
+        x: 0,
+        y: 0,
+        width: 620,
+        height: 600,
+        isVisible: false
+      };
+
+      const levelBannerImage = {
+        img: null,
+        isVisible: false,
+        width: 400,
+        height: 400,
+        x: 0,
+        y: 0,
+        show(imgObj) {
+          this.img = imgObj;
+          this.isVisible = true;
+          this.x = canvas.width / 2 - this.width / 2;
+          this.y = canvas.height / 2 - this.height / 2;
+          setTimeout(() => {
+            this.isVisible = false;
+          }, 4000);
+        }
+      };
+
+      function checkIfAllImagesLoaded() {
+        if (imagesLoaded === imagesToLoad) {
+          document.getElementById("imageStatus").style.display = "none";  // 隱藏
+
+          levels[0].ufoImage = imageMap["ufo black.png"];
+          levels[1].ufoImage = imageMap["ufo green.png"];
+          levels[2].ufoImage = imageMap["勒索.png"];
+          secretImageObj.img = imageMap["過關.png"];
+          adjustImagePositions();
+          resizeCanvas();
+          drawImage();
+        }
+      }
+
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        adjustImagePositions();
+        drawImage();
+      }
+
+      window.addEventListener("resize", resizeCanvas);
+
+      function adjustImagePositions() {
+        ufoSize = Math.min(canvas.width, canvas.height) * 0.3;
+        cannonSize = 200;
+        spaceshipSize = 590;
+        cannonX = 100;
+        cannonY = Math.max(borderThickness + 10, canvas.height - cannonSize - borderThickness - 10);
+        laserSize = 150 * 3;
+        secretImageObj.x = canvas.width / 2 - secretImageObj.width / 2;
+        secretImageObj.y = canvas.height / 2 - secretImageObj.height / 2;
+      }
+
+      function spawnUfo() {
+        if (ufoGenerationStopped) return;
+        const ufoY = Math.random() * (canvas.height - borderThickness * 2 - ufoSize) + borderThickness;
+        const dy = (Math.random() - 0.5) * 4; // 上下斜角速度
+
+        ufos.push({
+          x: canvas.width,
+          y: ufoY,
+          dx: -ufoSpeed,
+          dy: dy,
+          img: levels[currentLevel].ufoImage,
+          isExploding: false
+        });
+      }
+
+      function drawImage() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 畫邊界
+        ctx.fillStyle = "#999";
+        ctx.fillRect(0, 0, canvas.width, borderThickness);
+        ctx.fillStyle = "#666";
+        ctx.fillRect(0, canvas.height - borderThickness, canvas.width, borderThickness);
+
+        ctx.drawImage(spaceshipImg, -470, canvas.height / 2 - spaceshipSize / 2, spaceshipSize, spaceshipSize);
+        ctx.drawImage(cannonImg, cannonX, cannonY, cannonSize, cannonSize);
+
+        for (let i = 0; i < ufos.length; i++) {
+          const u = ufos[i];
+          if (u.isExploding) {
+            const explosionSize = currentLevel === 2 ? ufoSize : ufoSize * 0.5;
+            ctx.drawImage(explosionImg, u.x, u.y, explosionSize, explosionSize);
+          } else {
+            u.x += u.dx;
+            u.y += u.dy;
+
+            if (u.y <= borderThickness || u.y + ufoSize >= canvas.height - borderThickness) {
+              u.dy *= -1;
+            }
+
+            ctx.drawImage(u.img, u.x, u.y, ufoSize, ufoSize);
+          }
+        }
+
+        for (let i = 0; i < lasers.length; i++) {
+          lasers[i].x += laserSpeed;
+          ctx.drawImage(laserImg, lasers[i].x, lasers[i].y, laserSize, laserSize / 10);
+
+          for (let j = 0; j < ufos.length; j++) {
+            const u = ufos[j];
+            if (!u.isExploding &&
+                lasers[i].x + laserSize > u.x &&
+                lasers[i].x < u.x + ufoSize &&
+                lasers[i].y + laserSize / 10 > u.y &&
+                lasers[i].y < u.y + ufoSize) {
+              u.isExploding = true;
+              hitsInCurrentLevel++;
+
+              setTimeout(() => {
+                ufos.splice(j, 1);
+              }, 100);
+
+              if (hitsInCurrentLevel >= levels[currentLevel].targetHits) {
+                levels[currentLevel].onComplete();
+              }
+            }
+          }
+        }
+
+        if (secretImageObj.isVisible) {
+          ctx.drawImage(secretImageObj.img, secretImageObj.x, secretImageObj.y, secretImageObj.width, secretImageObj.height);
+        }
+
+        if (levelBannerImage.isVisible) {
+          ctx.drawImage(levelBannerImage.img, levelBannerImage.x, levelBannerImage.y, levelBannerImage.width, levelBannerImage.height);
+        }
+
+        ufos = ufos.filter(u => u.x + ufoSize > 0);
+        lasers = lasers.filter(l => l.x < canvas.width);
+
+        requestAnimationFrame(drawImage);
+      }
+
+      function startLevel(levelIndex) {
+        const level = levels[levelIndex];
+        hitsInCurrentLevel = 0;
+        ufoGenerationStopped = false;
+        ufos = [];
+        lasers = [];
+
+        alert(level.name + "\n\n" + level.description);
+        spawnUfo();
+        ufoIntervalId = setInterval(spawnUfo, 3000);
+      }
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowUp") {
+          if (cannonY >= 20) cannonY -= 20;
+        } else if (event.key === "ArrowDown") {
+          if (cannonY <= canvas.height - cannonSize - borderThickness) cannonY += 20;
+        } else if (event.key === " ") {
+          lasers.push({
+            x: cannonX + cannonSize - 30,
+            y: cannonY + cannonSize / 2 - 15
+          });
+        }
+      });
+
+      startBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        canvas.style.display = "block";
+        title.style.display = "none";
+        startBtn.style.display = "none";
+        resizeCanvas();
+        startLevel(0);
+        drawImage();
+      });
+    </script>
+</body>
+
+</html>
